@@ -11,11 +11,14 @@ import {
 import {
   addDoc,
   collection,
+  deleteDoc,
+  doc,
   getFirestore,
   limit,
   onSnapshot,
   orderBy,
   query,
+  updateDoc,
   serverTimestamp
 } from 'firebase/firestore'
 import { getFirebaseConfig } from './firebase-config.js';
@@ -29,39 +32,61 @@ function signOutUser() {
   signOut(getAuth());
 }
 
-// Saves a new message to the Cloud Firestore.
-async function saveMessage(messageText) {
-  try {
-    await addDoc(collection(getFirestore(), 'messages'), {
-      name: getUserName(),
-      text: messageText,
-      profilePicUrl: getProfilePicUrl(),
-      timestamp: serverTimestamp()
-    });
-  }
-  catch(error) {
-    console.error('Error writing new message to Firebase Database', error);
-  }
-}
-
 // Returns true if a user is signed-in.
 function isUserSignedIn() {
   return !!getAuth().currentUser;
 }
 
+async function deleteMessage(id) {
+  const msg = await doc(collection(getFirestore(), 'messages'), id);
+  return deleteDoc(msg).catch(error => {
+    console.error('Error deleting a message from Firebase Database', error);
+  })
+}
+
+async function editMessage(id, messageText) {
+  const msg = await doc(collection(getFirestore(), 'messages'), id);
+  return updateDoc(msg, {
+    text: messageText,
+    timestamp: serverTimestamp()
+  }).catch(error => {
+    console.error('Error editing a message in Firebase Database', error);
+  });
+}
+
+// Saves a new message to the Cloud Firestore.
+async function saveMessage(messageText) {
+  try {
+    await addDoc(collection(getFirestore(), 'messages'), {
+      name: getUserName(),
+      uid: getUid(),
+      text: messageText,
+      profilePicUrl: getProfilePicUrl(),
+      timestamp: serverTimestamp()
+    });
+  } catch (error) {
+    console.error('Error writing new message to Firebase Database', error);
+  }
+}
+
 // Loads chat messages history and listens for upcoming ones.
+// This function is safe to call multiple times.
 function loadMessages() {
+  if (state.unsubMessages != null) {
+    state.unsubMessages();
+  }
+
   const recentMessagesQuery = query(collection(getFirestore(), 'messages'), orderBy('timestamp', 'desc'), limit(12));
 
   // Start listening to the query.
-  onSnapshot(recentMessagesQuery, function(snapshot) {
-    snapshot.docChanges().forEach(function(change) {
+  state.unsubMessages = onSnapshot(recentMessagesQuery, function (snapshot) {
+    snapshot.docChanges().forEach(function (change) {
       if (change.type === 'removed') {
-        deleteMessage(change.doc.id);
+        removeMessage(change.doc.id);
       } else {
         var message = change.doc.data();
         displayMessage(change.doc.id, message.timestamp, message.name,
-                      message.text, message.profilePicUrl, message.imageUrl);
+          message.uid, message.text, message.profilePicUrl);
       }
     });
   });
@@ -81,6 +106,12 @@ function getProfilePicUrl() {
 // Returns the signed-in user's display name.
 function getUserName() {
   return getAuth().currentUser.displayName;
+}
+
+// Returns the signed-in user's uid.
+function getUid() {
+  let currentUser = getAuth().currentUser;
+  return currentUser?.uid;
 }
 
 // Triggered when the send new message form is submitted.
@@ -121,6 +152,11 @@ function authStateObserver(user) {
 
     // Disable text input.
     messageInputElement.setAttribute('disabled', true);
+
+    // Reload all messages on state change.
+    // This is a lazy way to re-paint all message elements
+    // with user-specific elements.
+    loadMessages();
   }
 }
 
@@ -134,13 +170,25 @@ function checkSignedInWithMessage() {
 }
 
 // Template for messages.
-var MESSAGE_TEMPLATE =
+const MESSAGE_TEMPLATE =
   '<figure class="media-left">' +
   '<div><p class="image is-64x64"><img class="pic is-rounded"></p></div></figure>' +
   '<div class="media-content"><div class="content">' +
   '<div class="name"></div>' +
   '<p class="text"></p>' +
   '</div></div>';
+
+// Template for edit button on a message.
+const EDIT_BUTTON_TEMPLATE =
+  '<button class="button is-ghost is-small">Edit</button></div>';
+
+// Template for edit message form.
+const MESSAGE_FORM_TEMPLATE =
+  '<div class="field"><p class="control">' +
+  '<textarea class="textarea"></textarea></p></div>' +
+  '<nav class="level"><div class="level-left"><div class="level-item">' +
+  '<button class="button is-info">Submit</button>' +
+  '</div></div></nav></div>';
 
 // Adds a size to Google Profile pics URLs.
 function addSizeToGoogleProfilePic(url) {
@@ -150,8 +198,8 @@ function addSizeToGoogleProfilePic(url) {
   return url;
 }
 
-// Delete a Message from the UI.
-function deleteMessage(id) {
+// Remove a Message from the UI.
+function removeMessage(id) {
   var article = document.getElementById(id);
   // If an element for that message exists we delete it.
   if (article) {
@@ -202,11 +250,32 @@ function createAndInsertMessage(id, timestamp) {
   return article;
 }
 
+function createAndInsertEditButton(article) {
+  const editElement = document.createElement('div');
+  editElement.classList.add('media-right');
+  editElement.innerHTML = EDIT_BUTTON_TEMPLATE;
+
+  article.appendChild(editElement);
+  return article.querySelector('.button');
+}
+
+function createEditForm(text) {
+  const editForm = document.createElement('form');
+  editForm.setAttribute('action', '#'); // disable default form action.
+  editForm.innerHTML = MESSAGE_FORM_TEMPLATE;
+
+  // Setup input textbox and preload it with existing message.
+  const inputElement = editForm.querySelector('textarea');
+  inputElement.value = text;
+
+  return editForm;
+}
+
 // Displays a Message in the UI.
-function displayMessage(id, timestamp, name, text, picUrl, imageUrl) {
+function displayMessage(id, timestamp, name, uid, text, picUrl) {
   noMessageElement.classList.add('is-hidden');
 
-  var article = document.getElementById(id) || createAndInsertMessage(id, timestamp);
+  const article = document.getElementById(id) || createAndInsertMessage(id, timestamp);
 
   // profile picture
   if (picUrl) {
@@ -214,13 +283,70 @@ function displayMessage(id, timestamp, name, text, picUrl, imageUrl) {
     pic.src = addSizeToGoogleProfilePic(picUrl);
   }
 
-  var ts = timestamp ? timestamp.toDate().toLocaleString() : ""
+  const ts = timestamp ? timestamp.toDate().toLocaleString() : ""
   article.querySelector('.name').innerHTML = `<strong>${name}</strong> <small>${ts}</small>`;
 
-  var messageElement = article.querySelector('.text');
+  const messageElement = article.querySelector('.text');
   messageElement.textContent = text;
   // Replace all line breaks by <br>.
   messageElement.innerHTML = messageElement.innerHTML.replace(/\n/g, '<br>');
+
+  // Setup edit button if message is from the signed-in user.
+  if (uid && uid === getUid()) {
+    const editButton = article.querySelector('.button') || createAndInsertEditButton(article);
+
+    // Setup a tiny helper function that removes the editForm from the UI.
+    const closeEditForm = (editForm) => {
+      messageElement.classList.remove('is-hidden');
+      editForm.remove();
+    };
+
+    // If edit button already exists, we want to blow away the existing
+    // event listeners. We do this by cloning the existing edit button
+    // which, in the process of cloning, wipes away the existing event listeners.
+    const clonedEditButton = editButton.cloneNode(true);
+    clonedEditButton.addEventListener('click', () => {
+      // If edit is already in-progress, back out of edit mode.
+      if (messageElement.classList.contains('is-hidden')) {
+        // Find the edit from. Should be around the message element.
+        const editForm = messageElement.parentNode.querySelector('form');
+        if (editForm) {
+          closeEditForm(editForm);
+        }
+        return;
+      }
+
+      // Setup form for edit message and disable default submit form action.
+      const editForm = createEditForm(text);
+
+      // On form submit, edit/delete the message in the database.
+      // Change will trigger a re-display from the subscriber
+      // we setup in loadMessages().
+      editForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const inputElement = editForm.querySelector('textarea');
+        if (inputElement.value) {
+          editMessage(id, inputElement.value).then(() => {
+            closeEditForm(editForm);
+          });
+        } else {
+          deleteMessage(id);
+        }
+      });
+
+      // Insert the edit form and hide the message element.
+      messageElement.parentNode.insertBefore(editForm, messageElement);
+      messageElement.classList.add('is-hidden');
+    });
+    // Replace old edit button with the cloned one w/ new event listeners.
+    editButton.parentNode.replaceChild(clonedEditButton, editButton);
+  } else {
+    // Message is not from signed-in user. Remove the edit button if it exists.
+    const editButton = article.querySelector('.button');
+    if (editButton) {
+      editButton.remove();
+    }
+  }
 }
 
 // Enables or disables the submit button depending on the values of the input
@@ -252,6 +378,11 @@ signInButtonElement.addEventListener('click', signIn);
 // Toggle for the button.
 messageInputElement.addEventListener('keyup', toggleButton);
 messageInputElement.addEventListener('change', toggleButton);
+
+// Application states
+const state = {
+  unsubMessages: null,
+};
 
 // Initialize Firebase
 const firebaseAppConfig = getFirebaseConfig();

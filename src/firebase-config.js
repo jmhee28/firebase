@@ -1,5 +1,10 @@
 const config = {
-  /* TODO: ADD YOUR FIREBASE CONFIGURATION OBJECT HERE */
+  apiKey: "AIzaSyBekQf8uIAECFzJw3Znwh-9AkjfyKOmY5E",
+  authDomain: "myboard-39eda.firebaseapp.com",
+  projectId: "myboard-39eda",
+  storageBucket: "myboard-39eda.appspot.com",
+  messagingSenderId: "927528540841",
+  appId: "1:927528540841:web:c786b63d92d1c0d6c327b8"
 };
 
 export function getFirebaseConfig() {
