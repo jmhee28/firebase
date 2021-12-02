@@ -1,10 +1,11 @@
 const config = {
-  apiKey: "AIzaSyBekQf8uIAECFzJw3Znwh-9AkjfyKOmY5E",
-  authDomain: "myboard-39eda.firebaseapp.com",
-  projectId: "myboard-39eda",
-  storageBucket: "myboard-39eda.appspot.com",
-  messagingSenderId: "927528540841",
-  appId: "1:927528540841:web:c786b63d92d1c0d6c327b8"
+   apiKey: "AIzaSyD7EWtLvac8ru5qS2vRFRlShCnygJ47bwY",
+  authDomain: "myboard-995d2.firebaseapp.com",
+  projectId: "myboard-995d2",
+  databaseURL: "https://myboard-995d2-default-rtdb.firebaseio.com",
+  storageBucket: "myboard-995d2.appspot.com",
+  messagingSenderId: "761366581601",
+  appId: "1:761366581601:web:3b2a869b661a6086eb7520"
 };
 
 export function getFirebaseConfig() {

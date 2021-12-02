@@ -4,19 +4,34 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>My Board</title>
+  <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+  <title>Camera</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.2/css/bulma.min.css">
 </head>
 
 
 
 <body>
+  
+    <!-- Stream video via webcam -->
+
+    <video id="video" width=400 height=400 playsinline controls autoplay></video>
+
+<!-- Trigger canvas web API -->
+    <button id="snap">Capture</button>
+    
+<!-- Webcam video snapshot -->
+    <canvas id="canvas" width="400" height="400"></canvas>
+    <form id="image-form" action="#">
+      <input id="mediaCapture" type="file" accept="image/*" capture="camera">
+      <button id="submitImage" title="Add an image" class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect mdl-color--amber-400 mdl-color-text--white">
+        <i class="material-icons">image</i>
+      </button>
+    </form>
+    
+
   <nav class="navbar is-transparent">
-    <div class="navbar-brand">
-      <a class="navbar-item" href="https://bulma.io">
-        My Board
-      </a>
-    </div>
+    
 
     <div class="navbar-end">
       <div class="navbar-item">
@@ -41,58 +56,49 @@
         <div class="column">
           <nav class="panel">
             <p class="panel-heading">
-              Boards
+              Comments
             </p>
-            <a class="panel-block is-active">
-              <span class="panel-icon">
-                <i class="fas fa-book" aria-hidden="true"></i>
-              </span>
-              General
-            </a>
-            <a class="panel-block is-active">
-              <span class="panel-icon">
-                <i class="fas fa-book" aria-hidden="true"></i>
-              </span>
-              Private
-            </a>
+            <div class="column is-four-fifths">
+              <div class="box">
+                <article class="media">
+                  <div class="media-content">
+                    <form id="message-form" action="#">
+                      <div class="field">
+                        <p class="control">
+                          <textarea class="textarea" id="message" placeholder="Add a message..." disabled></textarea>
+                        </p>
+                      </div>
+                      <nav class="level">
+                        <div class="level-left">
+                          <div class="level-item">
+                            <button class="button is-info" id="submit" disabled>Submit</button>
+                            
+                          </div>
+                        </div>
+                      </nav>
+                    </form>
+                  </div>
+                </article>
+              </div>
+              <section id="no-message" class="hero is-medium">
+                <div class="hero-body">
+                  <p class="title">
+                    Post a message...
+                  </p>
+                  <p class="subtitle">
+                    What's on your mind?
+                  </p>
+                </div>
+              </section>
+              <div class="box" id="messages">
+              </div>
+    
+            </div>
+            <a class
           </nav>
         </div>
 
-        <div class="column is-four-fifths">
-          <div class="box">
-            <article class="media">
-              <div class="media-content">
-                <form id="message-form" action="#">
-                  <div class="field">
-                    <p class="control">
-                      <textarea class="textarea" id="message" placeholder="Add a message..." disabled></textarea>
-                    </p>
-                  </div>
-                  <nav class="level">
-                    <div class="level-left">
-                      <div class="level-item">
-                        <button class="button is-info" id="submit" disabled>Submit</button>
-                      </div>
-                    </div>
-                  </nav>
-                </form>
-              </div>
-            </article>
-          </div>
-          <section id="no-message" class="hero is-medium">
-            <div class="hero-body">
-              <p class="title">
-                Post a message...
-              </p>
-              <p class="subtitle">
-                What's on your mind?
-              </p>
-            </div>
-          </section>
-          <div class="box" id="messages">
-          </div>
-
-        </div>
+       
       </div>
     </div>
   </section>
@@ -100,6 +106,10 @@
   <!-- Import and configure the Firebase SDK -->
   <!-- These scripts are made available when the app is served or deployed on Firebase Hosting -->
   <!-- If you do not want to serve/host your project using Firebase Hosting see https://firebase.google.com/docs/web/setup -->
+   
   <script src="scripts/main.js"></script>
 </body>
+<script src="https://www.gstatic.com/firebasejs/7.7.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/7.7.0/firebase-storage.js"></script>
+
 </html>

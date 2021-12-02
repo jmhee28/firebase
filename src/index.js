@@ -21,6 +21,12 @@ import {
   updateDoc,
   serverTimestamp
 } from 'firebase/firestore'
+import {
+  getStorage,
+  ref,
+  uploadBytesResumable,
+  getDownloadURL,
+} from 'firebase/storage';
 import { getFirebaseConfig } from './firebase-config.js';
 
 async function signIn() {
@@ -68,7 +74,54 @@ async function saveMessage(messageText) {
     console.error('Error writing new message to Firebase Database', error);
   }
 }
+async function saveImageMessage(file) {
+  try {
+    // 1 - We add a message with a loading icon that will get updated with the shared image.
+    const messageRef = await addDoc(collection(getFirestore(), 'images'), {
+      name: getUserName(),
+      imageUrl: LOADING_IMAGE_URL,
+      profilePicUrl: getProfilePicUrl(),
+      timestamp: serverTimestamp()
+    });
 
+    // 2 - Upload the image to Cloud Storage.
+    const filePath = `${getAuth().currentUser.uid}/${messageRef.id}/${file.name}`;
+    const newImageRef = ref(getStorage(), filePath);
+    const fileSnapshot = await uploadBytesResumable(newImageRef, file);
+    
+    // 3 - Generate a public URL for the file.
+    const publicImageUrl = await getDownloadURL(newImageRef);
+
+    // 4 - Update the chat message placeholder with the image’s URL.
+    await updateDoc(messageRef,{
+      imageUrl: publicImageUrl,
+      storageUri: fileSnapshot.metadata.fullPath
+    });
+  } catch (error) {
+    console.error('There was an error uploading a file to Cloud Storage:', error);
+  }
+}
+function onMediaFileSelected(event) {
+  event.preventDefault();
+  var file = event.target.files[0];
+
+  // Clear the selection in the file picker input.
+  imageFormElement.reset();
+
+  // Check if the file is an image.
+  if (!file.type.match('image.*')) {
+    var data = {
+      message: 'You can only share images',
+      timeout: 2000
+    };
+    signInSnackbarElement.MaterialSnackbar.showSnackbar(data);
+    return;
+  }
+  // Check if the user is signed-in
+  if (checkSignedInWithMessage()) {
+    saveImageMessage(file);
+  }
+}
 // Loads chat messages history and listens for upcoming ones.
 // This function is safe to call multiple times.
 function loadMessages() {
@@ -197,7 +250,7 @@ function addSizeToGoogleProfilePic(url) {
   }
   return url;
 }
-
+var LOADING_IMAGE_URL = 'https://www.google.com/images/spin-32.gif?a';
 // Remove a Message from the UI.
 function removeMessage(id) {
   var article = document.getElementById(id);
@@ -358,13 +411,15 @@ function toggleButton() {
     submitButtonElement.setAttribute('disabled', 'true');
   }
 }
-
 // Shortcuts to DOM Elements.
 const messageListElement = document.getElementById('messages');
 const messageFormElement = document.getElementById('message-form');
 const messageInputElement = document.getElementById('message');
 const submitButtonElement = document.getElementById('submit');
 const imageButtonElement = document.getElementById('submitImage');
+var imageFormElement = document.getElementById('image-form');
+ var mediaCaptureElement = document.getElementById('mediaCapture');
+ var userPicElement = document.getElementById('user-pic');
 const userNameElement = document.getElementById('user-name');
 const signInButtonElement = document.getElementById('sign-in');
 const signOutButtonElement = document.getElementById('sign-out');
@@ -378,6 +433,61 @@ signInButtonElement.addEventListener('click', signIn);
 // Toggle for the button.
 messageInputElement.addEventListener('keyup', toggleButton);
 messageInputElement.addEventListener('change', toggleButton);
+const firebaseAppConfig = getFirebaseConfig();
+initializeApp(firebaseAppConfig);
+initFirebaseAuth();
+imageButtonElement.addEventListener('click', function(e) {
+  e.preventDefault();
+  mediaCaptureElement.click();
+});
+mediaCaptureElement.addEventListener('change', onMediaFileSelected);
+
+
+
+
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const snap = document.getElementById("snap");
+const errorMsgElement = document.querySelector('span#errorMsg');
+
+const constraints = {
+    audio: true,
+    video: {
+    width: 400, height: 400
+    }
+};
+
+// Access webcam
+async function init() {
+try {
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      handleSuccess(stream);
+      } catch (e) {
+            errorMsgElement.innerHTML = `navigator.getUserMedia error:${e.toString()}`;
+      }
+}
+
+// Success
+function handleSuccess(stream) {
+      window.stream = stream;
+      video.srcObject = stream;
+}
+
+// Load init
+
+
+// Draw image
+var context = canvas.getContext('2d');
+snap.addEventListener("click", function() {
+        context.drawImage(video, 0, 0, 400, 400);
+        var image = new Image();
+        image.id = "pic";
+        image.src = canvas.toDataURL();
+        console.log(image.src)
+        if (checkSignedInWithMessage()) {
+          saveImageMessage(image);
+        }
+});
 
 // Application states
 const state = {
@@ -385,9 +495,7 @@ const state = {
 };
 
 // Initialize Firebase
-const firebaseAppConfig = getFirebaseConfig();
-initializeApp(firebaseAppConfig);
-initFirebaseAuth();
 
+init();
 // We load currently existing chat messages and listen to new ones.
 loadMessages();
